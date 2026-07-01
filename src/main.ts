@@ -1,9 +1,8 @@
-import {app, BrowserWindow, ipcMain, screen} from "electron";
+import {app, BrowserWindow, ipcMain, screen, session} from "electron";
 import * as path from "node:path";
 import started from "electron-squirrel-startup";
 import {pollForCookies} from "./utils/cookie";
-import {connectWS} from "./utils/ws";
-import {toMessageData} from "tiny-bilibili-ws";
+import {getChannel, type LiveConnection, type LiveMessage} from "./channels";
 import Store from 'electron-store';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
@@ -33,15 +32,30 @@ app.on('second-instance', () => {
 
 // Initialize store for window size persistence
 const store = new Store<{
-  cookie: string;
+  /** 旧版本遗留的 B 站 Cookie，启动时迁移为 `cookie:bilibili`。 */
+  cookie?: string;
   queueWindowSize: {
     width: number;
     height: number;
   };
+  /** 各渠道 Cookie，键形如 `cookie:bilibili` / `cookie:douyin`。 */
+  [key: string]: unknown;
 }>();
+
+/** 某渠道 Cookie 在 store 中的键名。 */
+const cookieKey = (channelId: string) => `cookie:${channelId}`;
+
+// 旧版本使用单一 `cookie` 键（仅 B 站），迁移到按渠道存储以兼容历史登录态。
+const legacyCookie = store.get("cookie") as string | undefined;
+if (legacyCookie && !store.get(cookieKey("bilibili"))) {
+  store.set(cookieKey("bilibili"), legacyCookie);
+  store.delete("cookie");
+}
 
 let mainWindow: BrowserWindow | null = null;
 let queueWindow: BrowserWindow | null = null;
+// 各渠道的直播连接，键为 channelId，支持多个渠道同时监听。
+const connections = new Map<string, LiveConnection>();
 
 function createMainWindow() {
   const scale = screen.getPrimaryDisplay().scaleFactor;
@@ -152,74 +166,78 @@ app.on("window-all-closed", () => {
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
-ipcMain.handle("connect", async (event, url, targetCookie, roomId) => {
-  let cookies = store.get("cookie") || "";
-  let shouldRetry = false;
+ipcMain.handle(
+  "connect",
+  async (event, channelId: string, roomId: string) => {
+    const channel = getChannel(channelId);
+    const key = cookieKey(channelId);
 
-  try {
-    if (cookies) {
-      // 如果cookie存在，直接尝试连接
-      const live = await connectWS(roomId, cookies);
-      setupLiveListener(live, event, roomId);
-      return true;
+    // 归一化消息带上来源渠道后转发给渲染层，供上层按渠道路由处理。
+    const onMessage = (msg: LiveMessage) => {
+      if (import.meta.env.DEV) {
+        console.log(`[${channelId}]`, msg);
+      }
+      event.sender.send("live", { channel: channelId, ...msg });
+    };
+
+    // 仅替换该渠道自身的连接，不影响其它已连接的渠道。
+    const openWith = async (cookies: string) => {
+      connections.get(channelId)?.close();
+      connections.delete(channelId);
+      connections.set(channelId, await channel.connect(roomId, cookies, onMessage));
+    };
+
+    // 1. 已有 Cookie 直接尝试连接
+    const saved = (store.get(key) as string | undefined) || "";
+    if (saved) {
+      try {
+        await openWith(saved);
+        return true;
+      } catch (error) {
+        console.error(`[${channelId}] 使用已有Cookie连接失败:`, error);
+        store.delete(key); // 失效则清除后重新获取
+      }
     }
-    shouldRetry = true;
-  } catch (error) {
-    console.error("Connection failed with existing cookies:", error);
-    // 连接失败，清除cookie并重试
-    store.delete("cookie");
-    shouldRetry = true;
-  }
 
-  if (shouldRetry) {
-    // 重新获取cookie
-    const result = await pollForCookies(url, targetCookie);
+    // 2. 打开登录页轮询获取 Cookie 后再连接
+    const result = await pollForCookies(channel.loginUrl, channel.targetCookie);
     if (!result) {
-      return false;
+      return false; // 用户取消
     }
-    cookies = result;
 
     try {
-      const live = await connectWS(roomId, cookies);
-      setupLiveListener(live, event, roomId);
-      // 连接成功后保存cookie
-      store.set("cookie", cookies);
+      await openWith(result);
+      store.set(key, result); // 连接成功后保存
       return true;
     } catch (error) {
-      console.error("Connection failed after getting new cookies:", error);
-      store.delete("cookie");
+      console.error(`[${channelId}] 获取新Cookie后连接失败:`, error);
+      store.delete(key);
       throw error;
     }
   }
+);
+
+// 断开单个渠道的连接（其它渠道保持不变）。
+ipcMain.handle("disconnect", (_event, channelId: string) => {
+  connections.get(channelId)?.close();
+  connections.delete(channelId);
 });
 
-// 设置直播监听器的辅助函数
-function setupLiveListener(live: any, event: any, roomId: number) {
-  live.on("DANMU_MSG", (danmu: any) => {
-    const data = toMessageData(danmu);
-    const content: string = data.info[1] || "", // 弹幕内容
-      uid: number = data.info[2][0] || 0, // 用户ID
-      username: string = data.info[2][1] || "未知", // 用户名
-      face: string =
-        data.info[0][15].user.base.face ||
-        "https://i0.hdslb.com/bfs/face/member/noface.jpg", // 用户头像
-      guardLevel: number = data.info[3][0] || 0; // 用户大航海等级
-    const medalInfo: any = data.info[3] || [];
-    const medalLevel: number = medalInfo[3] === roomId ? medalInfo[0] : 0;
-    if (import.meta.env.DEV) {
-      console.log(data);
+// 重置连接与第三方登录态：断开所有连接、清空各渠道 Cookie，并清除浏览器
+// 会话里的登录态，确保下次能重新登录 / 切号。
+ipcMain.handle("reset-connection", async () => {
+  for (const conn of connections.values()) {
+    conn.close();
+  }
+  connections.clear();
+  for (const key of Object.keys(store.store)) {
+    if (key.startsWith("cookie:")) {
+      store.delete(key);
     }
-    event.sender.send("live", {
-      cmd: data.cmd,
-      content,
-      uid,
-      username,
-      face,
-      guardLevel,
-      medalLevel,
-    });
-  });
-}
+  }
+  store.delete("cookie"); // 旧版遗留键
+  await session.defaultSession.clearStorageData({ storages: ["cookies"] });
+});
 
 // Handle queue window toggle
 ipcMain.on("toggle-queue-window", (_, visible: boolean) => {

@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import type { QueueConfig, QueueItem } from "../types";
+import type { QueueItem } from "../types";
 import { broadcastQueue } from "../utils/broadcast";
 import { STORAGE_KEYS, readJSON, writeJSON, removeKey } from "../utils/storage";
 
@@ -7,9 +7,9 @@ import { STORAGE_KEYS, readJSON, writeJSON, removeKey } from "../utils/storage";
  * 点怪队列状态的唯一来源，集中处理：入队（含舰长插队排序）、移除、清空、
  * 本地持久化以及向展示页广播。此前这些逻辑分散在 ControlPanel 与 QueuePanel 两处。
  *
- * @param config 响应式配置，读取 allowJump 决定是否按舰长等级插队。
+ * 是否按舰长等级插队由入队时传入的 allowJump 决定（渠道特有配置）。
  */
-export function useQueue(config: QueueConfig) {
+export function useQueue() {
   const queue = ref<QueueItem[]>([]);
 
   const persist = () => {
@@ -26,8 +26,8 @@ export function useQueue(config: QueueConfig) {
     persist();
   };
 
-  const add = (item: QueueItem) => {
-    if (config.allowJump) {
+  const add = (item: QueueItem, allowJump = false) => {
+    if (allowJump) {
       // 允许插队时，按舰长等级降序插入；等级相同则保持先入队者靠前。
       const insertIndex = queue.value.findIndex(
         (q) =>

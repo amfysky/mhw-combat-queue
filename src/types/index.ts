@@ -1,9 +1,6 @@
 import type { ElectronAPI } from "../preload";
 
 export interface QueueConfig {
-  minGuardLevel: number;
-  minMedalLevel: number;
-  allowJump: boolean;
   queueTitle: string;
   textColor: string;
   strokeColor: string;

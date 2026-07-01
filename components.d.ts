@@ -8,8 +8,8 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ChannelPanel: typeof import('./src/components/panels/ChannelPanel.vue')['default']
     ConfigPanel: typeof import('./src/components/panels/ConfigPanel.vue')['default']
-    ConnectionPanel: typeof import('./src/components/panels/ConnectionPanel.vue')['default']
     MonsterModal: typeof import('./src/components/modals/MonsterModal.vue')['default']
     MonsterPanel: typeof import('./src/components/panels/MonsterPanel.vue')['default']
     NAvatar: typeof import('naive-ui')['NAvatar']
@@ -35,6 +35,9 @@ declare module 'vue' {
     NPopconfirm: typeof import('naive-ui')['NPopconfirm']
     NScrollbar: typeof import('naive-ui')['NScrollbar']
     NSwitch: typeof import('naive-ui')['NSwitch']
+    NTabPane: typeof import('naive-ui')['NTabPane']
+    NTabs: typeof import('naive-ui')['NTabs']
+    NTooltip: typeof import('naive-ui')['NTooltip']
     NUpload: typeof import('naive-ui')['NUpload']
     NUploadDragger: typeof import('naive-ui')['NUploadDragger']
     QueuePanel: typeof import('./src/components/panels/QueuePanel.vue')['default']

@@ -2,9 +2,6 @@ import { type QueueConfig } from "../types";
 import { STORAGE_KEYS, readJSON, writeJSON } from "./storage";
 
 export const defaultQueueConfig: QueueConfig = {
-  minGuardLevel: 0,
-  minMedalLevel: 0,
-  allowJump: false,
   queueTitle: "发送 点怪<怪物名> 点怪",
   textColor: "#000000",
   strokeColor: "#ffffff",

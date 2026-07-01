@@ -14,6 +14,7 @@ const testData = reactive({
 
 const sendTestDanmu = () => {
   emit('sendTest', {
+    channel: 'bilibili', // 模拟 B站 弹幕，走 B站 的等级门槛
     cmd: 'DANMU_MSG',
     content: `点怪 ${testData.content}`,
     uid: Math.floor(Math.random() * 1000000),

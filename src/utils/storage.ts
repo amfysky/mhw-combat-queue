@@ -5,7 +5,7 @@
 export const STORAGE_KEYS = {
   config: "queue_config",
   queue: "mhw_queue",
-  lastRoom: "last_room_id",
+  channels: "channel_settings", // 各渠道设置 { [channelId]: { roomId, autoConnect, minGuardLevel, minMedalLevel } }
 } as const;
 
 /**

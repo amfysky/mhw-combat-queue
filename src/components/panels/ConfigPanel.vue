@@ -26,19 +26,6 @@ defineProps<{
           <n-color-picker v-model:value="config.backgroundColor" />
         </n-form-item>
       </n-flex>
-
-      <n-flex :wrap="false" class="mt-3">
-        <n-form-item label="最低舰长等级" class="flex-1">
-          <n-input-number v-model:value="config.minGuardLevel" :min="0" class="w-full" />
-        </n-form-item>
-        <n-form-item label="最低勋章等级" class="flex-1">
-          <n-input-number v-model:value="config.minMedalLevel" :min="0" class="w-full" />
-        </n-form-item>
-      </n-flex>
-
-      <n-form-item label="允许舰长插队" label-placement="left" class="mt-3">
-        <n-switch v-model:value="config.allowJump" />
-      </n-form-item>
     </n-form>
   </n-card>
 </template>

@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 import { truncate } from 'lodash'
-import { RefreshOutline } from '@vicons/ionicons5'
+import { RefreshOutline, LogOutOutline } from '@vicons/ionicons5'
 import { type Monster, type QueueItem } from '@/types'
 import { findBestMatchMonster } from '@/utils/monster'
+import { CHANNELS } from '@/channels/meta'
 import { useConfig } from '@/composables/useConfig'
+import { useChannels } from '@/composables/useChannels'
 import { useMonsters } from '@/composables/useMonsters'
 import { useQueue } from '@/composables/useQueue'
 import MonsterModal from '../components/modals/MonsterModal.vue'
 import ConfigPanel from '../components/panels/ConfigPanel.vue'
-import ConnectionPanel from '../components/panels/ConnectionPanel.vue'
+import ChannelPanel from '../components/panels/ChannelPanel.vue'
 import MonsterPanel from '../components/panels/MonsterPanel.vue'
 import QueuePanel from '../components/panels/QueuePanel.vue'
 import TestPanel from '../components/panels/TestPanel.vue'
@@ -17,8 +19,9 @@ import TestPanel from '../components/panels/TestPanel.vue'
 const $message = useMessage()
 
 const { config, reset: resetConfig } = useConfig()
+const { settings: channelSettings } = useChannels()
 const { monsters, load: loadMonsters } = useMonsters()
-const { queue, add: addToQueue, remove: removeFromQueue, clear: clearQueue, restore: restoreQueue } = useQueue(config)
+const { queue, add: addToQueue, remove: removeFromQueue, clear: clearQueue, restore: restoreQueue } = useQueue()
 
 // 处理直播弹幕：识别「点怪 xxx」，匹配怪物并按门槛入队
 const handleLiveMessage = (_event: any, data: any) => {
@@ -35,8 +38,14 @@ const handleLiveMessage = (_event: any, data: any) => {
     timestamp: Date.now()
   }
 
-  if (item.guardLevel >= config.minGuardLevel && item.medalLevel >= config.minMedalLevel) {
-    addToQueue(item)
+  // 按来源渠道各自的「等级能力」分别套用门槛：B站有舰长+勋章，抖音只有粉丝团。
+  // 无该能力的维度直接放行（如抖音的舰长恒为 0，不参与过滤）。
+  const meta = CHANNELS.find(c => c.id === data.channel)
+  const cs = channelSettings[data.channel]
+  const passGuard = !meta?.hasGuardLevel || !cs || item.guardLevel >= cs.minGuardLevel
+  const passMedal = !meta?.medalLabel || !cs || item.medalLevel >= cs.minMedalLevel
+  if (passGuard && passMedal) {
+    addToQueue(item, cs?.allowJump ?? false)
   }
 }
 
@@ -54,6 +63,14 @@ const handleEditMonster = (monster?: Monster) => {
 const handleResetConfig = () => {
   resetConfig()
   $message.success('已恢复默认配置')
+}
+
+// 连接面板引用，用于从顶栏触发连接/登录态重置
+const channelPanel = ref<{ reset: () => Promise<void> } | null>(null)
+
+const handleResetConnection = async () => {
+  await channelPanel.value?.reset()
+  $message.success('已重置连接与登录态')
 }
 
 onMounted(async () => {
@@ -82,26 +99,42 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <n-popconfirm @positive-click="handleResetConfig">
-        <template #trigger>
-          <n-button secondary size="small">
-            <template #icon>
-              <n-icon>
-                <RefreshOutline />
-              </n-icon>
-            </template>
-            重置配置
-          </n-button>
-        </template>
-        确认将标题、颜色、门槛等配置恢复为默认？（不影响怪物与队列）
-      </n-popconfirm>
+      <n-flex :wrap="false" align="center" size="small">
+        <n-popconfirm @positive-click="handleResetConnection">
+          <template #trigger>
+            <n-button secondary size="small">
+              <template #icon>
+                <n-icon>
+                  <LogOutOutline />
+                </n-icon>
+              </template>
+              重置连接
+            </n-button>
+          </template>
+          确认断开连接并清除第三方登录态？下次连接需重新登录。
+        </n-popconfirm>
+
+        <n-popconfirm @positive-click="handleResetConfig">
+          <template #trigger>
+            <n-button secondary size="small">
+              <template #icon>
+                <n-icon>
+                  <RefreshOutline />
+                </n-icon>
+              </template>
+              重置配置
+            </n-button>
+          </template>
+          确认将标题、颜色、门槛等配置恢复为默认？（不影响怪物与队列）
+        </n-popconfirm>
+      </n-flex>
     </header>
 
     <div class="cp-body">
       <div class="cp-side">
         <n-scrollbar>
           <n-flex vertical size="large" class="pr-3 pb-1">
-            <ConnectionPanel />
+            <ChannelPanel ref="channelPanel" :settings="channelSettings" />
             <ConfigPanel :config="config" />
             <TestPanel @send-test="handleTestMessage" />
           </n-flex>
