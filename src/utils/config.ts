@@ -1,6 +1,5 @@
 import { type QueueConfig } from "../types";
-
-const CONFIG_KEY = "queue_config";
+import { STORAGE_KEYS, readJSON, writeJSON } from "./storage";
 
 export const defaultQueueConfig: QueueConfig = {
   minGuardLevel: 0,
@@ -13,17 +12,10 @@ export const defaultQueueConfig: QueueConfig = {
 };
 
 export function loadConfig(): QueueConfig {
-  const savedConfig = localStorage.getItem(CONFIG_KEY);
-  if (savedConfig) {
-    try {
-      return JSON.parse(savedConfig);
-    } catch (e) {
-      console.error("Failed to parse saved config:", e);
-    }
-  }
-  return defaultQueueConfig;
+  // 与默认值合并，兼容旧数据缺失新增字段的情况
+  return { ...defaultQueueConfig, ...readJSON<Partial<QueueConfig>>(STORAGE_KEYS.config, {}) };
 }
 
 export function saveConfig(config: QueueConfig) {
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  writeJSON(STORAGE_KEYS.config, config);
 }

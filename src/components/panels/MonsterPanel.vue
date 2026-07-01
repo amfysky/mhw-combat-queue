@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AddSharp, CreateOutline, DownloadOutline, EllipsisVertical, FolderOpenOutline, TrashOutline } from '@vicons/ionicons5'
+import { AddSharp, CreateOutline, DownloadOutline, EllipsisVertical, FolderOpenOutline, TrashOutline, PawOutline, SearchOutline } from '@vicons/ionicons5'
 import { NIcon, useMessage } from 'naive-ui'
 import pako from 'pako'
 import { h, ref, computed } from 'vue'
@@ -103,13 +103,14 @@ const clearAllMonsters = async () => {
   }
 }
 
-const removeMonster = async (index: number) => {
-  const { value: _monsters } = monsters
-  if (!_monsters) return
-  const monster = _monsters[index]
+const removeMonster = async (monster: Monster) => {
+  const list = monsters.value
+  if (!list) return
   try {
     await db.removeMonster(monster.name)
-    _monsters.splice(index, 1)
+    // 按名称定位，避免搜索过滤时索引与完整列表错位
+    const index = list.findIndex(m => m.name === monster.name)
+    if (index !== -1) list.splice(index, 1)
     $message.success('删除成功')
   } catch (error) {
     $message.error(`删除失败: ${error}`)
@@ -142,9 +143,9 @@ const handleDropdownSelect = (key: string) => {
 </script>
 
 <template>
-  <n-card title="怪物管理" class="bg-white rounded-lg shadow" content-style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
+  <n-card title="怪物管理" class="panel-card" content-style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
     <template #header-extra>
-      <n-flex :wrap="false">
+      <n-flex :wrap="false" align="center" size="small">
         <n-button type="primary" size="small" @click="$emit('edit')">
           <template #icon>
             <n-icon>
@@ -155,7 +156,7 @@ const handleDropdownSelect = (key: string) => {
         </n-button>
         <n-popconfirm @positive-click="clearAllMonsters">
           <template #trigger>
-            <n-button type="error" size="small">
+            <n-button type="error" size="small" secondary>
               <template #icon>
                 <n-icon>
                   <TrashOutline />
@@ -178,28 +179,34 @@ const handleDropdownSelect = (key: string) => {
       </n-flex>
     </template>
     <n-flex vertical class="flex-1 overflow-hidden">
-      <n-input
-        v-model:value="searchKeyword"
-        placeholder="搜索怪物名称或别名..."
-        clearable
-      />
+      <n-input v-model:value="searchKeyword" placeholder="搜索怪物名称或别名..." clearable />
       <n-scrollbar>
-        <n-flex vertical>
-          <n-flex v-for="(monster, index) in filteredMonsters" :key="index" :wrap="false" justify="space-between" align="center"
-            size="small" class="p-3 bg-gray-50 rounded-lg mb-2">
-            <n-flex :wrap="false" align="center" size="small">
-              <n-image :src="monster.image" width="50" height="50" object-fit="cover" />
-              <span class="flex-1">{{ monster.name }}</span>
+        <n-empty v-if="!filteredMonsters?.length"
+          :description="searchKeyword ? '未找到匹配的怪物' : '还没有怪物，点击右上角添加'" class="mt-16">
+          <template #icon>
+            <n-icon>
+              <SearchOutline v-if="searchKeyword" />
+              <PawOutline v-else />
+            </n-icon>
+          </template>
+        </n-empty>
+        <n-flex v-else vertical>
+          <n-flex v-for="monster in filteredMonsters" :key="monster.name" :wrap="false"
+            justify="space-between" align="center" size="small" class="monster-row">
+            <n-flex :wrap="false" align="center" size="small" class="min-w-0">
+              <n-image :src="monster.image" width="46" height="46" object-fit="cover"
+                class="rounded-lg overflow-hidden" />
+              <n-ellipsis class="flex-1 font-medium">{{ monster.name }}</n-ellipsis>
             </n-flex>
             <n-flex :wrap="false" align="center" size="small">
-              <n-button type="primary" size="small" @click="$emit('edit', monster)">
+              <n-button type="primary" size="small" quaternary @click="$emit('edit', monster)">
                 <template #icon>
                   <n-icon>
                     <CreateOutline />
                   </n-icon>
                 </template>
               </n-button>
-              <n-button type="error" size="small" @click="removeMonster(index)">
+              <n-button type="error" size="small" quaternary @click="removeMonster(monster)">
                 <template #icon>
                   <n-icon>
                     <TrashOutline />
@@ -213,3 +220,19 @@ const handleDropdownSelect = (key: string) => {
     </n-flex>
   </n-card>
 </template>
+
+<style scoped>
+.monster-row {
+  padding: 10px 12px;
+  background: #f7f8fa;
+  border: 1px solid #eef0f4;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.monster-row:hover {
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.06);
+}
+</style>

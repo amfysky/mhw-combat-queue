@@ -1,75 +1,33 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { TrashOutline, EyeOutline, EyeOffOutline } from '@vicons/ionicons5'
-import DefaultMonsterImage from '../../assets/unknown_monster.webp'
-import type { Monster } from '../../types'
-import { type QueueItem } from '../../types'
-import { broadcastQueue } from '../../utils/broadcast'
+import { ref } from 'vue'
+import { TrashOutline, EyeOutline, EyeOffOutline, HourglassOutline } from '@vicons/ionicons5'
+import type { Monster, QueueItem } from '../../types'
+import { resolveMonsterImage } from '../../utils/monster'
 
-const props = defineProps<{
+// 纯展示组件：仅负责渲染与交互，队列的增删/持久化/广播由 useQueue 统一处理。
+defineProps<{
   monsters: Monster[]
   queue: QueueItem[]
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:queue', queue: QueueItem[]): void
+  (e: 'remove', index: number): void
+  (e: 'clear'): void
 }>()
 
-const QUEUE_KEY = 'mhw_queue'
 const isQueueVisible = ref(false)
-
-const getMonsterImage = computed(() => (content: string): string => {
-  const monster = props.monsters.find((m: Monster) => m.name === content)
-  return monster?.image || DefaultMonsterImage
-})
-
-const removeFromQueue = (index: number) => {
-  const newQueue = [...props.queue]
-  newQueue.splice(index, 1)
-  emit('update:queue', newQueue)
-  broadcastQueue(newQueue)
-}
-
-const clearQueue = () => {
-  emit('update:queue', [])
-  broadcastQueue([])
-}
 
 const toggleQueueVisibility = () => {
   isQueueVisible.value = !isQueueVisible.value
   window.electron?.toggleQueueWindow(isQueueVisible.value)
 }
-
-// 监听队列变化并保存
-watch(() => props.queue, (newQueue) => {
-  if (newQueue.length > 0) {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(newQueue))
-  } else {
-    localStorage.removeItem(QUEUE_KEY)
-  }
-}, { deep: true })
-
-// 加载保存的队列
-onMounted(() => {
-  const savedQueue = localStorage.getItem(QUEUE_KEY)
-  if (savedQueue) {
-    try {
-      const parsedQueue = JSON.parse(savedQueue)
-      emit('update:queue', parsedQueue)
-      broadcastQueue(parsedQueue)
-    } catch (error) {
-      console.error('Failed to load saved queue:', error)
-      localStorage.removeItem(QUEUE_KEY)
-    }
-  }
-})
 </script>
 
 <template>
-  <n-card title="当前队列" class="bg-white rounded-lg shadow" content-style="height: 0; flex: 1;">
+  <n-card title="当前队列" class="panel-card" content-style="height: 0; flex: 1;">
     <template #header-extra>
       <n-flex :wrap="false" align="center" size="small">
-        <n-button type="primary" size="small" @click="toggleQueueVisibility">
+        <n-button :type="isQueueVisible ? 'default' : 'primary'" size="small" @click="toggleQueueVisibility">
           <template #icon>
             <n-icon>
               <EyeOffOutline v-if="isQueueVisible" />
@@ -78,9 +36,9 @@ onMounted(() => {
           </template>
           {{ isQueueVisible ? '隐藏' : '显示' }}
         </n-button>
-        <n-popconfirm @positive-click="clearQueue">
+        <n-popconfirm @positive-click="emit('clear')">
           <template #trigger>
-            <n-button type="error" size="small">
+            <n-button type="error" size="small" secondary>
               <template #icon>
                 <n-icon>
                   <TrashOutline />
@@ -93,21 +51,29 @@ onMounted(() => {
         </n-popconfirm>
       </n-flex>
     </template>
+
     <n-scrollbar>
-      <n-flex vertical>
+      <n-empty v-if="!queue.length" description="暂无点怪，等待观众发送弹幕" class="mt-16">
+        <template #icon>
+          <n-icon><HourglassOutline /></n-icon>
+        </template>
+      </n-empty>
+      <n-flex v-else vertical>
         <n-flex v-for="(item, index) in queue" :key="item.uid" :wrap="false" justify="space-between" align="center"
-          class="p-3 bg-gray-50 rounded-lg mb-2 transition-all hover:bg-gray-100 hover:translate-x-1">
-          <n-flex :wrap="false" align="center" size="small">
-            <n-avatar :src="item.face" round />
-            <n-ellipsis class="text-xl font-bold" style="max-width: 100px;">
+          class="queue-row">
+          <n-flex :wrap="false" align="center" size="small" class="min-w-0">
+            <div class="rank">{{ index + 1 }}</div>
+            <n-avatar :src="item.face" round :size="36" />
+            <n-ellipsis class="text-base font-semibold" style="max-width: 100px;">
               {{ item.username }}
             </n-ellipsis>
           </n-flex>
           <n-flex :wrap="false" align="center" size="small">
-            <span class="text-xl font-bold text-nowrap">{{ item.content }}</span>
-            <n-image :src="getMonsterImage(item.content)" width="50" height="50" object-fit="cover" />
+            <span class="text-base font-semibold text-nowrap">{{ item.content }}</span>
+            <n-image :src="resolveMonsterImage(monsters, item.content)" width="46" height="46" object-fit="cover"
+              class="rounded-lg overflow-hidden" />
           </n-flex>
-          <n-button type="error" size="small" @click="removeFromQueue(index)">
+          <n-button type="error" size="small" quaternary @click="emit('remove', index)">
             移除
           </n-button>
         </n-flex>
@@ -115,3 +81,34 @@ onMounted(() => {
     </n-scrollbar>
   </n-card>
 </template>
+
+<style scoped>
+.queue-row {
+  padding: 10px 12px;
+  background: #f7f8fa;
+  border: 1px solid #eef0f4;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+
+.queue-row:hover {
+  background: #ffffff;
+  transform: translateX(2px);
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.06);
+}
+
+.rank {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #eef2ff;
+  color: #4f5aed;
+  font-weight: 700;
+  font-size: 12px;
+}
+</style>

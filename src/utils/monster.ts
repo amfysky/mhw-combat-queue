@@ -1,5 +1,15 @@
-import { truncate } from "lodash";
 import type { Monster } from "../types";
+import DefaultMonsterImage from "../assets/unknown_monster.webp";
+
+/**
+ * 根据队列项内容解析对应的怪物图片，未匹配到时回退到默认图。
+ */
+export const resolveMonsterImage = (
+  monsters: Monster[],
+  content: string
+): string => {
+  return monsters.find((m) => m.name === content)?.image || DefaultMonsterImage;
+};
 
 /**
  * 计算两个字符串的Levenshtein距离
@@ -78,8 +88,6 @@ export const findBestMatchMonster = (
       }
     }
   }
-
-  console.log("name: ", name, "bestScore: ", bestScore);
 
   // 如果最佳匹配的相似度低于0.75，认为没有匹配
   if (bestScore < 0.75) {

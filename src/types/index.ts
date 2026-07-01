@@ -26,11 +26,6 @@ export interface Monster {
   aliases?: string[]; // Optional array of alternative names for the monster
 }
 
-export interface MonsterStorage {
-  monsters: Monster[];
-  version: number;
-}
-
 declare global {
   interface Window {
     electron: ElectronAPI;
