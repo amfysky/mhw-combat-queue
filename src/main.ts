@@ -34,10 +34,8 @@ app.on('second-instance', () => {
 const store = new Store<{
   /** 旧版本遗留的 B 站 Cookie，启动时迁移为 `cookie:bilibili`。 */
   cookie?: string;
-  queueWindowSize: {
-    width: number;
-    height: number;
-  };
+  /** 展示窗口上次所在的显示器 id：重开时恢复到该屏并居中显示。 */
+  queueWindowDisplayId?: number;
   /** 各渠道 Cookie，键形如 `cookie:bilibili` / `cookie:douyin`。 */
   [key: string]: unknown;
 }>();
@@ -54,6 +52,14 @@ if (legacyCookie && !store.get(cookieKey("bilibili"))) {
 
 let mainWindow: BrowserWindow | null = null;
 let queueWindow: BrowserWindow | null = null;
+// 展示窗口当前「归属」的显示器 id：手动调整/拖拽时更新，显示时在此屏居中、隐藏时
+// 停靠到此屏下方，避免用主屏坐标误把窗口推到副屏。
+let queueDisplayId: number | null = null;
+// 展示窗口是否处于「显示」态：隐藏（停靠屏外）时忽略 move 事件，避免把程序化停靠
+// 误判为用户跨屏拖拽而改写归属显示器。
+let queueVisible = false;
+// 程序化调整展示窗口 bounds 期间的重入保护，避免把程序化变更误当成用户操作保存。
+let applyingQueueBounds = false;
 // 各渠道的直播连接，键为 channelId，支持多个渠道同时监听。
 const connections = new Map<string, LiveConnection>();
 
@@ -93,17 +99,52 @@ function createMainWindow() {
   });
 }
 
-function createQueueWindow() {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-  const savedSize = store.get('queueWindowSize', {
-    width: 400,
-    height: 600,
+// 展示窗口尺寸固定，由通用配置「宽/高」决定（逻辑像素）；此为创建时的初始默认值，
+// 渲染层加载配置后经 set-queue-size 下发实际值。窗口不可缩放，故不再记忆/还原尺寸。
+const DEFAULT_QUEUE_SIZE = { width: 400, height: 600 };
+
+/** 按 id 取显示器；找不到（如拔线/重启后 id 变化）回退主屏。 */
+function displayById(id: number | null) {
+  return (
+    screen.getAllDisplays().find((d) => d.id === id) ??
+    screen.getPrimaryDisplay()
+  );
+}
+
+/** 展示窗口当前所在显示器（按与各屏重叠面积判定）。 */
+function queueDisplay() {
+  return screen.getDisplayMatching(queueWindow!.getBounds());
+}
+
+/** 把展示窗口在其归属显示器工作区内居中（保持当前尺寸）。 */
+function centerQueueWindow() {
+  if (!queueWindow) return;
+  const disp = displayById(queueDisplayId);
+  const b = queueWindow.getBounds();
+  applyingQueueBounds = true;
+  queueWindow.setBounds({
+    x: Math.round(disp.workArea.x + (disp.workArea.width - b.width) / 2),
+    y: Math.round(disp.workArea.y + (disp.workArea.height - b.height) / 2),
+    width: b.width,
+    height: b.height,
   });
+  applyingQueueBounds = false;
+}
+
+function createQueueWindow() {
+  // 显示时回到「上次所在的显示器」而非固定主屏；找不到该屏（拔线/重启后 id 变化）回退主屏。
+  const savedId = store.get("queueWindowDisplayId");
+  const home = displayById(savedId ?? null);
+  queueDisplayId = home.id;
 
   queueWindow = new BrowserWindow({
-    x: width,
-    y: height,
-    ...savedSize,
+    // 初始停靠到归属屏正下方（屏幕外），保持可被 OBS 采集但不遮挡画面。
+    x: home.bounds.x,
+    y: home.bounds.y + home.bounds.height,
+    // 尺寸固定、不可缩放；此为初始默认值，渲染层加载配置后会经 set-queue-size 下发实际值。
+    width: DEFAULT_QUEUE_SIZE.width,
+    height: DEFAULT_QUEUE_SIZE.height,
+    resizable: false,
     titleBarStyle: "hidden",
     transparent: true,
     minimizable: false,
@@ -114,13 +155,14 @@ function createQueueWindow() {
     },
   });
 
-  // Save window bounds when resized
-  queueWindow.on('resize', () => {
-    if (queueWindow) {
-      store.set('queueWindowSize', {
-        width: queueWindow.getBounds().width,
-        height: queueWindow.getBounds().height,
-      });
+  // 尺寸由配置固定，无需再监听 resize/保存尺寸。仅跟踪「显示态下被拖到哪块屏」，
+  // 以便下次显示时在该屏居中、并跨重启保留。隐藏（停靠屏外）时不处理。
+  queueWindow.on("move", () => {
+    if (!queueWindow || applyingQueueBounds || !queueVisible) return;
+    const disp = queueDisplay();
+    if (disp.id !== queueDisplayId) {
+      queueDisplayId = disp.id;
+      store.set("queueWindowDisplayId", disp.id);
     }
   });
   
@@ -243,13 +285,30 @@ ipcMain.handle("reset-connection", async () => {
 ipcMain.on("toggle-queue-window", (_, visible: boolean) => {
   if (!queueWindow) return;
 
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  // 一切相对「归属显示器」操作，避免用主屏坐标把窗口推到副屏。
+  queueVisible = visible;
   if (visible) {
-    // 显示窗口并移动到屏幕中心
-    queueWindow.center();
+    // 在归属屏工作区内居中并置顶。
+    centerQueueWindow();
     queueWindow.moveTop();
   } else {
-    // 隐藏窗口并移动到屏幕外
-    queueWindow.setPosition(width, height);
+    // 停靠到归属屏正下方（屏幕外）：与显示时同屏，不跨屏。
+    const disp = displayById(queueDisplayId);
+    applyingQueueBounds = true;
+    queueWindow.setPosition(disp.bounds.x, disp.bounds.y + disp.bounds.height);
+    applyingQueueBounds = false;
   }
+});
+
+// 设置展示窗口固定尺寸（逻辑像素）：由通用配置「宽/高」经渲染层下发。窗口不可缩放。
+ipcMain.on("set-queue-size", (_event, width: number, height: number) => {
+  if (!queueWindow) return;
+  applyingQueueBounds = true;
+  queueWindow.setBounds({
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height)),
+  });
+  applyingQueueBounds = false;
+  // 正在显示时，尺寸变化后重新居中，避免以左上角为锚点跑偏。
+  if (queueVisible) centerQueueWindow();
 });

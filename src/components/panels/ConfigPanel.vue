@@ -26,6 +26,15 @@ defineProps<{
           <n-color-picker v-model:value="config.backgroundColor" />
         </n-form-item>
       </n-flex>
+
+      <n-flex :wrap="false" class="mt-3">
+        <n-form-item label="窗口宽度" class="flex-1">
+          <n-input-number v-model:value="config.width" :min="100" class="w-full" />
+        </n-form-item>
+        <n-form-item label="窗口高度" class="flex-1">
+          <n-input-number v-model:value="config.height" :min="100" class="w-full" />
+        </n-form-item>
+      </n-flex>
     </n-form>
   </n-card>
 </template>

@@ -6,6 +6,8 @@ export const defaultQueueConfig: QueueConfig = {
   textColor: "#000000",
   strokeColor: "#ffffff",
   backgroundColor: "#00000024",
+  width: 400,
+  height: 600,
 };
 
 export function loadConfig(): QueueConfig {

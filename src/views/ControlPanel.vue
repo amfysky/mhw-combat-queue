@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { truncate } from 'lodash'
 import { RefreshOutline, LogOutOutline } from '@vicons/ionicons5'
 import { type Monster, type QueueItem } from '@/types'
@@ -22,6 +22,13 @@ const { config, reset: resetConfig } = useConfig()
 const { settings: channelSettings } = useChannels()
 const { monsters, load: loadMonsters } = useMonsters()
 const { queue, add: addToQueue, remove: removeFromQueue, clear: clearQueue, restore: restoreQueue } = useQueue()
+
+// 展示窗口尺寸固定，由通用配置驱动：变更时（含首次）下发到主进程设置窗口大小。
+watch(
+  () => [config.width, config.height] as const,
+  ([w, h]) => window.electron?.setQueueSize(w, h),
+  { immediate: true }
+)
 
 // 处理直播弹幕：识别「点怪 xxx」，匹配怪物并按门槛入队
 const handleLiveMessage = (_event: any, data: any) => {

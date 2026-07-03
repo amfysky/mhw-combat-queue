@@ -5,6 +5,10 @@ export interface QueueConfig {
   textColor: string;
   strokeColor: string;
   backgroundColor: string;
+  /** 展示窗口固定宽度（逻辑像素）。 */
+  width: number;
+  /** 展示窗口固定高度（逻辑像素）。 */
+  height: number;
 }
 
 export interface QueueItem {

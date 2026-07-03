@@ -40,6 +40,10 @@ const api = {
   toggleQueueWindow: (visible: boolean) => {
     ipcRenderer.send("toggle-queue-window", visible);
   },
+  /** 设置展示窗口固定宽高（逻辑像素）。 */
+  setQueueSize: (width: number, height: number) => {
+    ipcRenderer.send("set-queue-size", width, height);
+  },
 };
 
 contextBridge.exposeInMainWorld("electron", api);
