@@ -44,6 +44,16 @@ const api = {
   setQueueSize: (width: number, height: number) => {
     ipcRenderer.send("set-queue-size", width, height);
   },
+  /**
+   * 设置「移除第一位」全局快捷键（Electron accelerator 字符串，空串表示注销）。
+   */
+  setRemoveFirstShortcut: (accelerator: string) => {
+    ipcRenderer.send("set-remove-first-shortcut", accelerator);
+  },
+  /** 订阅主进程「移除第一位」快捷键触发（回调无参数，首个参数为事件对象）。 */
+  onRemoveFirst: (callback: (event: IpcRendererEvent) => void) => {
+    ipcRenderer.on("remove-first", callback);
+  },
 };
 
 contextBridge.exposeInMainWorld("electron", api);

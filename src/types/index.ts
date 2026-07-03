@@ -9,6 +9,11 @@ export interface QueueConfig {
   width: number;
   /** 展示窗口固定高度（逻辑像素）。 */
   height: number;
+  /**
+   * 「移除第一位」全局快捷键（Electron accelerator 字符串，如 `CommandOrControl+Shift+D`）。
+   * 空串表示不启用。全局生效，直播时在游戏内也可触发。
+   */
+  removeFirstShortcut: string;
 }
 
 export interface QueueItem {

@@ -28,6 +28,7 @@ declare module 'vue' {
     NIcon: typeof import('naive-ui')['NIcon']
     NImage: typeof import('naive-ui')['NImage']
     NInput: typeof import('naive-ui')['NInput']
+    NInputGroup: typeof import('naive-ui')['NInputGroup']
     NInputNumber: typeof import('naive-ui')['NInputNumber']
     NMarquee: typeof import('naive-ui')['NMarquee']
     NMessageProvider: typeof import('naive-ui')['NMessageProvider']
@@ -43,6 +44,7 @@ declare module 'vue' {
     QueuePanel: typeof import('./src/components/panels/QueuePanel.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    ShortcutInput: typeof import('./src/components/ShortcutInput.vue')['default']
     TestPanel: typeof import('./src/components/panels/TestPanel.vue')['default']
   }
 }

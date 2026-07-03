@@ -8,6 +8,7 @@ export const defaultQueueConfig: QueueConfig = {
   backgroundColor: "#00000024",
   width: 400,
   height: 600,
+  removeFirstShortcut: "F8",
 };
 
 export function loadConfig(): QueueConfig {

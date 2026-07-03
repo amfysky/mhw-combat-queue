@@ -30,6 +30,18 @@ watch(
   { immediate: true }
 )
 
+// 「移除队首」全局快捷键：配置变更（含首次）时下发到主进程注册/更新。
+watch(
+  () => config.removeFirstShortcut,
+  (acc) => window.electron?.setRemoveFirstShortcut(acc ?? ''),
+  { immediate: true }
+)
+
+// 主进程快捷键触发：移除队首（队列为空时忽略）。
+const handleRemoveFirst = () => {
+  if (queue.value.length > 0) removeFromQueue(0)
+}
+
 // 处理直播弹幕：识别「点怪 xxx」，匹配怪物并按门槛入队
 const handleLiveMessage = (_event: any, data: any) => {
   if (data.cmd !== 'DANMU_MSG' || !data.content.startsWith('点怪')) return
@@ -82,6 +94,7 @@ const handleResetConnection = async () => {
 
 onMounted(async () => {
   window.electron?.live(handleLiveMessage)
+  window.electron?.onRemoveFirst(handleRemoveFirst)
   restoreQueue()
   try {
     await loadMonsters()
@@ -92,6 +105,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.electron?.unlisten('live', handleLiveMessage)
+  window.electron?.unlisten('remove-first', handleRemoveFirst)
 })
 </script>
 

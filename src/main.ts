@@ -1,4 +1,4 @@
-import {app, BrowserWindow, ipcMain, screen, session} from "electron";
+import {app, BrowserWindow, globalShortcut, ipcMain, screen, session} from "electron";
 import * as path from "node:path";
 import started from "electron-squirrel-startup";
 import {pollForCookies} from "./utils/cookie";
@@ -62,6 +62,8 @@ let queueVisible = false;
 let applyingQueueBounds = false;
 // 各渠道的直播连接，键为 channelId，支持多个渠道同时监听。
 const connections = new Map<string, LiveConnection>();
+// 当前已注册的「移除第一位」全局快捷键（accelerator 字符串），null 表示未启用。
+let removeFirstAccelerator: string | null = null;
 
 function createMainWindow() {
   const scale = screen.getPrimaryDisplay().scaleFactor;
@@ -180,6 +182,33 @@ function createQueueWindow() {
   queueWindow.on("closed", () => {
     app.quit();
   });
+}
+
+/**
+ * 注册/更新「移除第一位」全局快捷键：先注销旧的，再按新 accelerator 注册。
+ * 触发时通知控制台窗口移除队首。空串或注册失败（无效/被占用）时保持未启用。
+ */
+function applyRemoveFirstShortcut(accelerator: string) {
+  if (removeFirstAccelerator) {
+    globalShortcut.unregister(removeFirstAccelerator);
+    removeFirstAccelerator = null;
+  }
+  const acc = accelerator.trim();
+  if (!acc) return;
+  try {
+    const ok = globalShortcut.register(acc, () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("remove-first");
+      }
+    });
+    if (ok) {
+      removeFirstAccelerator = acc;
+    } else {
+      console.error(`[shortcut] 快捷键注册失败（可能被其它程序占用）: ${acc}`);
+    }
+  } catch (error) {
+    console.error(`[shortcut] 无效的快捷键: ${acc}`, error);
+  }
 }
 
 // This method will be called when Electron has finished
@@ -311,4 +340,14 @@ ipcMain.on("set-queue-size", (_event, width: number, height: number) => {
   applyingQueueBounds = false;
   // 正在显示时，尺寸变化后重新居中，避免以左上角为锚点跑偏。
   if (queueVisible) centerQueueWindow();
+});
+
+// 设置「移除第一位」全局快捷键：由渲染层在配置变更（含首次加载）时下发。
+ipcMain.on("set-remove-first-shortcut", (_event, accelerator: string) => {
+  applyRemoveFirstShortcut(accelerator ?? "");
+});
+
+// 退出前注销全部全局快捷键，避免残留占用。
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });
