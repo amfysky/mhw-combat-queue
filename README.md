@@ -15,7 +15,7 @@
 ![image](https://github.com/user-attachments/assets/213fb1ca-c784-4a62-a594-765c664c61c3)
 
 ## 快速开始
-前往[发布列表](https://github.com/yawntee/mhw-combat-queue/releases)下载
+前往[发布列表](https://github.com/amfysky/mhw-combat-queue/releases)下载
 
 ## 使用说明
 1. 选择渠道（B站 / 抖音），输入直播间号或链接

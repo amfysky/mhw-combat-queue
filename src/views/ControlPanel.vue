@@ -93,6 +93,8 @@ const handleResetConnection = async () => {
 }
 
 onMounted(async () => {
+  // 控制台窗口标题，标注作者（队列窗口标题固定为「点怪机 - 队列」，供 OBS 采集，勿改）
+  document.title = '点怪机 · Github@amfysky'
   window.electron?.live(handleLiveMessage)
   window.electron?.onRemoveFirst(handleRemoveFirst)
   restoreQueue()
@@ -169,11 +171,14 @@ onUnmounted(() => {
 
     <MonsterModal v-model:show="showMonsterModal" :monsters="monsters" :monster="selectedMonster"
       @update:monsters="monsters = $event" />
+
+    <div class="cp-watermark" aria-hidden="true">Github@amfysky</div>
   </div>
 </template>
 
 <style scoped>
 .control-panel {
+  position: relative;
   height: 100%;
   box-sizing: border-box;
   display: flex;
@@ -181,6 +186,22 @@ onUnmounted(() => {
   gap: 14px;
   padding: 16px;
   background: linear-gradient(160deg, #f5f7fc 0%, #eceff7 100%);
+}
+
+/* 作者水印：固定于右下角，半透明且不拦截点击 */
+.cp-watermark {
+  position: absolute;
+  right: 14px;
+  bottom: 10px;
+  z-index: 10;
+  pointer-events: none;
+  user-select: none;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #97a0b0;
+  opacity: 0.5;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.6);
 }
 
 .cp-header {

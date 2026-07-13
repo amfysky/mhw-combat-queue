@@ -1,0 +1,26 @@
+# pnpm 10+ reads settings from here, not the "pnpm" field in package.json.
+#
+# electron-forge's system check requires a flat (hoisted) node_modules layout
+# instead of pnpm's default symlinked one, so its native-module rebuild and
+# packaging steps can find dependencies.
+nodeLinker: hoisted
+
+#
+# @electron/rebuild pins @electron/node-gyp to a GitHub tarball, which the
+# blockExoticSubdeps supply-chain policy rejects. Redirect it to the identical
+# version published on the npm registry (same 10.2.0-electron.1 the tarball resolves to).
+overrides:
+  '@electron/node-gyp': npm:@electron/node-gyp@10.2.0-electron.1
+
+# pnpm blocks dependency build (postinstall) scripts by default. These are all
+# first-party Electron/build tooling this project depends on and must be allowed:
+#   electron / esbuild        - download their prebuilt binaries
+#   bufferutil / utf-8-validate / @parcel/watcher - compile native addons
+#   electron-winstaller       - needed by electron-forge's `make` (Squirrel installer)
+allowBuilds:
+  '@parcel/watcher': true
+  bufferutil: true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  utf-8-validate: true
