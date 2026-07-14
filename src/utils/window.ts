@@ -10,6 +10,10 @@ import { BrowserWindow } from "electron";
  * @param allowHttpPopups 是否放行 http(s) 的 window.open（登录流程可能需要弹窗）
  */
 export function hardenWindow(win: BrowserWindow, allowHttpPopups = false) {
+  // 放行的常规 web 协议，其余（自定义 scheme）一律拦截。
+  const isWebProtocol = (url: string) =>
+    /^(https?|about|blob|data):/i.test(url);
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (allowHttpPopups && /^https?:/i.test(url)) {
       return { action: "allow" };
@@ -18,8 +22,18 @@ export function hardenWindow(win: BrowserWindow, allowHttpPopups = false) {
   });
 
   // 阻止跳转到会拉起本地程序的自定义协议（放行常规 web 协议）。
-  win.webContents.on("will-navigate", (event, url) => {
-    if (!/^(https?|about|blob|data):/i.test(url)) {
+  // 用 will-frame-navigate 而非 will-navigate：后者只对主框架生效，抖音页面里的
+  // 广告/脚本常通过隐藏 iframe（子框架）触发自定义协议，仍会弹出系统「选择打开
+  // 链接的应用」对话框。will-frame-navigate 覆盖主框架与所有子框架。
+  win.webContents.on("will-frame-navigate", (details) => {
+    if (!isWebProtocol(details.url)) {
+      details.preventDefault();
+    }
+  });
+
+  // 服务端重定向落到自定义协议的情况一并拦掉。
+  win.webContents.on("will-redirect", (event, url) => {
+    if (!isWebProtocol(url)) {
       event.preventDefault();
     }
   });
